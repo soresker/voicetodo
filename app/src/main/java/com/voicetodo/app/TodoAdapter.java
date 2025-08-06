@@ -4,6 +4,8 @@ import android.graphics.Paint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.CheckBox;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -21,6 +23,7 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
     
     private List<Todo> todos = new ArrayList<>();
     private OnTodoListener listener;
+    private boolean animateItems = true;
     
     public interface OnTodoListener {
         void onTodoChecked(Todo todo, boolean isChecked);
@@ -43,6 +46,12 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
     public void onBindViewHolder(@NonNull TodoViewHolder holder, int position) {
         Todo todo = todos.get(position);
         holder.bind(todo);
+        
+        // Animate item only for new items
+        if (animateItems && position == todos.size() - 1) {
+            Animation slideIn = AnimationUtils.loadAnimation(holder.itemView.getContext(), R.anim.slide_in_bottom);
+            holder.itemView.startAnimation(slideIn);
+        }
     }
     
     @Override
@@ -97,9 +106,23 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
             });
             
             btnDelete.setOnClickListener(v -> {
-                if (listener != null) {
-                    listener.onTodoDeleted(todo);
-                }
+                // Animate deletion
+                Animation slideOut = AnimationUtils.loadAnimation(itemView.getContext(), R.anim.slide_out_right);
+                slideOut.setAnimationListener(new Animation.AnimationListener() {
+                    @Override
+                    public void onAnimationStart(Animation animation) {}
+                    
+                    @Override
+                    public void onAnimationEnd(Animation animation) {
+                        if (listener != null) {
+                            listener.onTodoDeleted(todo);
+                        }
+                    }
+                    
+                    @Override
+                    public void onAnimationRepeat(Animation animation) {}
+                });
+                itemView.startAnimation(slideOut);
             });
         }
     }
