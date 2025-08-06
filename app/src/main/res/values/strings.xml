@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Voice Todo</string>
+    <string name="btn_voice_record">Ses Kaydet</string>
+    <string name="btn_listening">Dinleniyor...</string>
+    <string name="hint_todo">Todo eklemek için ses butonu kullan</string>
+    <string name="no_todos">Henüz todo yok</string>
+    <string name="speech_prompt">Lütfen konuşun...</string>
+    <string name="speech_not_available">Konuşma tanıma mevcut değil</string>
+    <string name="error_speech">Konuşma tanıma hatası</string>
+    <string name="permission_denied">Mikrofon izni gerekli</string>
+</resources>
