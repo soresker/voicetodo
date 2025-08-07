@@ -163,4 +163,33 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
             });
         }
     }
+    
+    public void updateTodos(List<Todo> newTodos) {
+        this.todos.clear();
+        this.todos.addAll(newTodos);
+        notifyDataSetChanged();
+    }
+    
+    public void moveItem(int fromPosition, int toPosition) {
+        if (fromPosition < toPosition) {
+            for (int i = fromPosition; i < toPosition; i++) {
+                swapItems(i, i + 1);
+            }
+        } else {
+            for (int i = fromPosition; i > toPosition; i--) {
+                swapItems(i, i - 1);
+            }
+        }
+        notifyItemMoved(fromPosition, toPosition);
+    }
+    
+    private void swapItems(int i, int j) {
+        Todo temp = todos.get(i);
+        todos.set(i, todos.get(j));
+        todos.set(j, temp);
+    }
+    
+    public List<Todo> getTodos() {
+        return new ArrayList<>(todos);
+    }
 }

@@ -17,12 +17,14 @@ public class Todo {
     private Date scheduledDate;
     private boolean hasScheduledTime;
     private boolean hasScheduledDate;
+    private int displayOrder;
     
     public Todo() {
         this.timestamp = System.currentTimeMillis();
         this.isDone = false;
         this.category = Category.PERSONAL; // Default kategori
         this.priority = Priority.NORMAL; // Default öncelik
+        this.displayOrder = (int) (System.currentTimeMillis() / 1000); // Default order
     }
     
     public Todo(String text) {
@@ -124,5 +126,13 @@ public class Todo {
     
     public String getFormattedScheduledDateTime() {
         return DateTimeParser.formatDateTime(scheduledDate, hasScheduledTime, hasScheduledDate);
+    }
+    
+    public int getDisplayOrder() {
+        return displayOrder;
+    }
+    
+    public void setDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
     }
 }

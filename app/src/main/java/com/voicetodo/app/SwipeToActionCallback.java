@@ -21,11 +21,12 @@ public abstract class SwipeToActionCallback extends ItemTouchHelper.SimpleCallba
     private int backgroundColor;
     private Drawable deleteIcon;
     private Drawable completeIcon;
+    private Drawable dragIcon;
     private int intrinsicWidth;
     private int intrinsicHeight;
 
     protected SwipeToActionCallback(Context context) {
-        super(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
+        super(ItemTouchHelper.UP | ItemTouchHelper.DOWN, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
         this.context = context;
         
         // Initialize paint and background
@@ -40,6 +41,7 @@ public abstract class SwipeToActionCallback extends ItemTouchHelper.SimpleCallba
         // Load icons
         deleteIcon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_delete);
         completeIcon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_edit);
+        dragIcon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_sort_by_size);
         
         if (deleteIcon != null) {
             intrinsicWidth = deleteIcon.getIntrinsicWidth();
@@ -49,8 +51,13 @@ public abstract class SwipeToActionCallback extends ItemTouchHelper.SimpleCallba
 
     @Override
     public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
-        return false;
+        // Handle drag and drop
+        onItemMove(viewHolder.getAdapterPosition(), target.getAdapterPosition());
+        return true;
     }
+    
+    // Abstract method for handling item move
+    public abstract void onItemMove(int fromPosition, int toPosition);
 
     @Override
     public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY, int actionState, boolean isCurrentlyActive) {

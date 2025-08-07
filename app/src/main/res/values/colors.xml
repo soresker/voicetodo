@@ -28,6 +28,7 @@
     <color name="voice_secondary">#03DAC6</color>
     <color name="voice_surface">#FFFFFF</color>
     <color name="voice_background">#F8F9FA</color>
+    <color name="voice_on_surface">#212121</color>
     
     <!-- Category Colors -->
     <color name="category_personal">#2196F3</color>

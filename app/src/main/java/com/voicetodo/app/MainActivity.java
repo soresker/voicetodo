@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.view.View;
@@ -24,9 +25,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import com.google.android.material.tabs.TabLayout;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -40,12 +43,15 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     private TextView tvEmpty;
     private RecyclerView rvTodos;
     private TodoAdapter todoAdapter;
+    private TabLayout tabLayout;
     
     private TodoDatabase database;
     private TodoDao todoDao;
     private Vibrator vibrator;
     private Animation pulseAnimation;
     private NotificationHelper notificationHelper;
+    private SpeechRecognizer speechRecognizer;
+    private boolean isListening = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,8 +72,10 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
         tvStatus = findViewById(R.id.tv_status);
         tvEmpty = findViewById(R.id.tv_empty);
         rvTodos = findViewById(R.id.rv_todos);
+        tabLayout = findViewById(R.id.tab_layout);
         
         fabVoice.setOnClickListener(v -> startVoiceInput());
+        setupTabs();
     }
     
     private void initDatabase() {
@@ -80,7 +88,7 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
         rvTodos.setLayoutManager(new LinearLayoutManager(this));
         rvTodos.setAdapter(todoAdapter);
         
-        // Setup swipe actions
+        // Setup swipe actions and drag & drop
         ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new SwipeToActionCallback(this) {
             @Override
             public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
@@ -89,8 +97,141 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
                     handleSwipeAction(position, direction);
                 }
             }
+            
+            @Override
+            public void onItemMove(int fromPosition, int toPosition) {
+                handleDragAndDrop(fromPosition, toPosition);
+            }
         });
         itemTouchHelper.attachToRecyclerView(rvTodos);
+    }
+    
+    private void handleDragAndDrop(int fromPosition, int toPosition) {
+        // Update adapter immediately for smooth UI
+        todoAdapter.moveItem(fromPosition, toPosition);
+        
+        // Update display order in database
+        new Thread(() -> {
+            List<Todo> currentTodos = todoAdapter.getTodos();
+            for (int i = 0; i < currentTodos.size(); i++) {
+                Todo todo = currentTodos.get(i);
+                todo.setDisplayOrder(i);
+                todoDao.updateTodo(todo);
+            }
+        }).start();
+    }
+    
+    private void setupTabs() {
+        tabLayout.addTab(tabLayout.newTab().setText("📋 Tümü"));
+        tabLayout.addTab(tabLayout.newTab().setText("📅 Bugün"));
+        tabLayout.addTab(tabLayout.newTab().setText("🌅 Yarın"));
+        tabLayout.addTab(tabLayout.newTab().setText("📆 Bu Hafta"));
+        tabLayout.addTab(tabLayout.newTab().setText("📊 Kategoriler"));
+        
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                filterTodosByTab(tab.getPosition());
+            }
+            
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {}
+            
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {}
+        });
+    }
+    
+    private void filterTodosByTab(int position) {
+        new Thread(() -> {
+            List<Todo> filteredTodos;
+            Calendar today = Calendar.getInstance();
+            Calendar tomorrow = Calendar.getInstance();
+            tomorrow.add(Calendar.DAY_OF_MONTH, 1);
+            Calendar weekEnd = Calendar.getInstance();
+            weekEnd.add(Calendar.DAY_OF_MONTH, 7);
+            
+            switch (position) {
+                case 0: // Tümü
+                    filteredTodos = todoDao.getAllTodos();
+                    break;
+                case 1: // Bugün
+                    Date todayStart = getTodayStart();
+                    Date todayEnd = getTodayEnd();
+                    filteredTodos = todoDao.getTodosByDateRange(todayStart.getTime(), todayEnd.getTime());
+                    break;
+                case 2: // Yarın
+                    Date tomorrowStart = getTomorrowStart();
+                    Date tomorrowEnd = getTomorrowEnd();
+                    filteredTodos = todoDao.getTodosByDateRange(tomorrowStart.getTime(), tomorrowEnd.getTime());
+                    break;
+                case 3: // Bu Hafta
+                    Date weekStart = getTodayStart();
+                    Date weekEndDate = getWeekEnd();
+                    filteredTodos = todoDao.getTodosByDateRange(weekStart.getTime(), weekEndDate.getTime());
+                    break;
+                case 4: // Kategoriler
+                    // Show category-wise grouping (for now show all)
+                    filteredTodos = todoDao.getAllTodos();
+                    break;
+                default:
+                    filteredTodos = todoDao.getAllTodos();
+                    break;
+            }
+            
+            runOnUiThread(() -> {
+                todoAdapter.updateTodos(filteredTodos);
+                updateEmptyView(filteredTodos.isEmpty());
+            });
+        }).start();
+    }
+    
+    private Date getTodayStart() {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
+    }
+    
+    private Date getTodayEnd() {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        cal.set(Calendar.MILLISECOND, 999);
+        return cal.getTime();
+    }
+    
+    private Date getTomorrowStart() {
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_MONTH, 1);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
+    }
+    
+    private Date getTomorrowEnd() {
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_MONTH, 1);
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        cal.set(Calendar.MILLISECOND, 999);
+        return cal.getTime();
+    }
+    
+    private Date getWeekEnd() {
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_MONTH, 7);
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        cal.set(Calendar.MILLISECOND, 999);
+        return cal.getTime();
     }
     
     private void initAnimations() {
@@ -127,47 +268,178 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
             return;
         }
         
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.speech_prompt));
+        if (isListening) {
+            stopListening();
+            return;
+        }
         
         try {
-            startActivityForResult(intent, REQUEST_SPEECH_INPUT);
-            tvStatus.setText(getString(R.string.btn_listening));
-            
-            // Start pulse animation and haptic feedback
-            fabVoice.startAnimation(pulseAnimation);
-            if (vibrator != null && vibrator.hasVibrator()) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    vibrator.vibrate(100);
-                }
-            }
+            initSpeechRecognizer();
+            startListening();
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.error_speech), Toast.LENGTH_SHORT).show();
         }
     }
     
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void initSpeechRecognizer() {
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+        }
         
-        if (requestCode == REQUEST_SPEECH_INPUT && resultCode == RESULT_OK && data != null) {
-            ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            if (results != null && !results.isEmpty()) {
-                String spokenText = results.get(0);
-                if (!spokenText.trim().isEmpty()) {
-                    processVoiceCommand(spokenText.trim());
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                runOnUiThread(() -> {
+                    tvStatus.setText("🎤 Dinliyorum... Konuşmaya başlayın");
+                    fabVoice.setText("🔴 Durdur");
+                });
+            }
+            
+            @Override
+            public void onBeginningOfSpeech() {
+                runOnUiThread(() -> {
+                    tvStatus.setText("🗣️ Konuşuyor... Devam edin");
+                });
+            }
+            
+            @Override
+            public void onRmsChanged(float rmsdB) {
+                // Voice level indicator - optional
+            }
+            
+            @Override
+            public void onBufferReceived(byte[] buffer) {
+                // Partial results - optional
+            }
+            
+            @Override
+            public void onEndOfSpeech() {
+                runOnUiThread(() -> {
+                    tvStatus.setText("⏳ İşleniyor...");
+                });
+            }
+            
+            @Override
+            public void onError(int error) {
+                runOnUiThread(() -> {
+                    isListening = false;
+                    fabVoice.clearAnimation();
+                    fabVoice.setText("🎤 Sesli Komut");
+                    
+                    String errorMessage = "Ses tanıma hatası";
+                    switch (error) {
+                        case SpeechRecognizer.ERROR_AUDIO:
+                            errorMessage = "Ses kayıt hatası";
+                            break;
+                        case SpeechRecognizer.ERROR_CLIENT:
+                            errorMessage = "İstemci hatası";
+                            break;
+                        case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                            errorMessage = "Mikrofon izni gerekli";
+                            break;
+                        case SpeechRecognizer.ERROR_NETWORK:
+                            errorMessage = "Ağ hatası";
+                            break;
+                        case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                            errorMessage = "Ağ zaman aşımı";
+                            break;
+                        case SpeechRecognizer.ERROR_NO_MATCH:
+                            errorMessage = "Hiçbir metin tanınmadı";
+                            break;
+                        case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                            errorMessage = "Ses tanıyıcı meşgul";
+                            break;
+                        case SpeechRecognizer.ERROR_SERVER:
+                            errorMessage = "Sunucu hatası";
+                            break;
+                        case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                            errorMessage = "Konuşma zaman aşımı";
+                            break;
+                    }
+                    
+                    tvStatus.setText(getString(R.string.hint_todo));
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH) {
+                        Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+            
+            @Override
+            public void onResults(Bundle results) {
+                runOnUiThread(() -> {
+                    isListening = false;
+                    fabVoice.clearAnimation();
+                    fabVoice.setText("🎤 Sesli Komut");
+                    tvStatus.setText(getString(R.string.hint_todo));
+                    
+                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (matches != null && !matches.isEmpty()) {
+                        String spokenText = matches.get(0);
+                        if (!spokenText.trim().isEmpty()) {
+                            processVoiceCommand(spokenText.trim());
+                        }
+                    }
+                });
+            }
+            
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                // Show partial results in real-time
+                ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    runOnUiThread(() -> {
+                        tvStatus.setText("🎙️ \"" + matches.get(0) + "...\"");
+                    });
                 }
+            }
+            
+            @Override
+            public void onEvent(int eventType, Bundle params) {
+                // Handle speech events
+            }
+        });
+    }
+    
+    private void startListening() {
+        isListening = true;
+        
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR"); // Turkish language
+        intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000); // 3 seconds silence
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000); // 15 seconds minimum
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+        
+        tvStatus.setText("🎤 Hazırlanıyor...");
+        fabVoice.setText("🔴 Durdur");
+        
+        // Start pulse animation and haptic feedback
+        fabVoice.startAnimation(pulseAnimation);
+        if (vibrator != null && vibrator.hasVibrator()) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vibrator.vibrate(100);
             }
         }
         
-        // Stop animation and reset status
+        speechRecognizer.startListening(intent);
+    }
+    
+    private void stopListening() {
+        isListening = false;
+        if (speechRecognizer != null) {
+            speechRecognizer.stopListening();
+        }
         fabVoice.clearAnimation();
+        fabVoice.setText("🎤 Sesli Komut");
         tvStatus.setText(getString(R.string.hint_todo));
     }
+
     
     private void processVoiceCommand(String spokenText) {
         String command = spokenText.toLowerCase().trim();
@@ -684,6 +956,14 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
             todoDao.deleteTodo(todo);
             runOnUiThread(this::loadTodos);
         }).start();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+        }
     }
     
     @Override

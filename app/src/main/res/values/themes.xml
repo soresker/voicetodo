@@ -18,4 +18,10 @@
         <item name="colorSurface">@color/voice_surface</item>
         <item name="colorOnSurface">@color/black</item>
     </style>
+
+    <style name="TabTextStyle" parent="TextAppearance.Design.Tab">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
 </resources>

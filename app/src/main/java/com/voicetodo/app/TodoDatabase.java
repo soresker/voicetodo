@@ -8,7 +8,7 @@ import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 import android.content.Context;
 
-@Database(entities = {Todo.class}, version = 4, exportSchema = false)
+@Database(entities = {Todo.class}, version = 5, exportSchema = false)
 @TypeConverters({Converters.class})
 public abstract class TodoDatabase extends RoomDatabase {
     
@@ -42,6 +42,16 @@ public abstract class TodoDatabase extends RoomDatabase {
         }
     };
     
+    // Migration from version 4 to 5 (adding displayOrder column)
+    static final Migration MIGRATION_4_5 = new Migration(4, 5) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE todos ADD COLUMN displayOrder INTEGER NOT NULL DEFAULT 0");
+            // Set initial order based on timestamp
+            database.execSQL("UPDATE todos SET displayOrder = timestamp / 1000");
+        }
+    };
+    
     public static TodoDatabase getInstance(Context context) {
         if (INSTANCE == null) {
             synchronized (TodoDatabase.class) {
@@ -50,7 +60,7 @@ public abstract class TodoDatabase extends RoomDatabase {
                             context.getApplicationContext(),
                             TodoDatabase.class,
                             "todo_database"
-                    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                      .fallbackToDestructiveMigration() // Geliştirme aşamasında güvenli
                      .allowMainThreadQueries().build(); // Note: In production, use background thread
                 }

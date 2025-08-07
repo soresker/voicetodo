@@ -6,12 +6,13 @@ import androidx.room.Insert;
 import androidx.room.Query;
 import androidx.room.Update;
 
+import java.util.Date;
 import java.util.List;
 
 @Dao
 public interface TodoDao {
     
-    @Query("SELECT * FROM todos ORDER BY priority DESC, timestamp DESC")
+    @Query("SELECT * FROM todos ORDER BY displayOrder ASC, priority DESC, timestamp DESC")
     List<Todo> getAllTodos();
     
     @Insert
@@ -43,6 +44,9 @@ public interface TodoDao {
     
     @Query("SELECT * FROM todos WHERE DATE(scheduledDate/1000, 'unixepoch') = DATE(:date/1000, 'unixepoch') ORDER BY scheduledDate ASC")
     List<Todo> getTodosByDate(long date);
+    
+    @Query("SELECT * FROM todos WHERE scheduledDate >= :startDate AND scheduledDate <= :endDate ORDER BY scheduledDate ASC")
+    List<Todo> getTodosByDateRange(long startDate, long endDate);
     
     @Query("SELECT * FROM todos WHERE priority = :priority ORDER BY timestamp DESC")
     List<Todo> getTodosByPriority(Priority priority);

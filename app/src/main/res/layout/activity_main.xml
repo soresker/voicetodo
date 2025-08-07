@@ -107,6 +107,21 @@
 
                     </LinearLayout>
 
+                    <!-- Filter Tabs -->
+                    <com.google.android.material.tabs.TabLayout
+                        android:id="@+id/tab_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="8dp"
+                        android:layout_marginBottom="8dp"
+                        app:tabMode="scrollable"
+                        app:tabGravity="start"
+                        app:tabIndicatorColor="@color/voice_primary"
+                        app:tabTextColor="@color/voice_on_surface"
+                        app:tabSelectedTextColor="@color/voice_primary"
+                        app:tabIndicatorHeight="3dp"
+                        app:tabTextAppearance="@style/TabTextStyle" />
+
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
