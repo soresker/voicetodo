@@ -13,6 +13,13 @@
     <color name="red">#FFCF6679</color>
     <color name="green">#FF81C784</color>
     
+    <!-- Voice Todo Dark Colors -->
+    <color name="voice_primary">#BB86FC</color>
+    <color name="voice_primary_variant">#3700B3</color>
+    <color name="voice_secondary">#03DAC6</color>
+    <color name="voice_surface">#1F1F1F</color>
+    <color name="voice_background">#121212</color>
+    
     <!-- Additional dark theme colors -->
     <color name="background_dark">#FF121212</color>
     <color name="surface_dark">#FF1F1F1F</color>

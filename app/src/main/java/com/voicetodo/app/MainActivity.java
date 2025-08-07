@@ -23,9 +23,10 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
@@ -34,7 +35,7 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     private static final int REQUEST_SPEECH_INPUT = 1000;
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     
-    private FloatingActionButton fabVoice;
+    private ExtendedFloatingActionButton fabVoice;
     private TextView tvStatus;
     private TextView tvEmpty;
     private RecyclerView rvTodos;
@@ -44,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     private TodoDao todoDao;
     private Vibrator vibrator;
     private Animation pulseAnimation;
+    private NotificationHelper notificationHelper;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
         initDatabase();
         setupRecyclerView();
         initAnimations();
+        initNotifications();
         checkPermissions();
         loadTodos();
     }
@@ -93,6 +96,14 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     private void initAnimations() {
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         pulseAnimation = AnimationUtils.loadAnimation(this, R.anim.pulse_animation);
+    }
+    
+    private void initNotifications() {
+        notificationHelper = new NotificationHelper(this);
+        // Günlük hatırlatıcıyı başlat
+        notificationHelper.scheduleRecurringReminder();
+        // Yaklaşan hatırlatıcıları ayarla
+        notificationHelper.scheduleUpcomingReminders();
     }
     
     private void checkPermissions() {
@@ -172,22 +183,54 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
             announceStats();
         } else if (command.contains("oku") || command.contains("listele")) {
             readTodos();
+        } else if (command.contains("kategorileri göster") || command.contains("kategori listesi")) {
+            showCategories();
+        } else if (command.contains("kategori") && (command.contains("oku") || command.contains("listele"))) {
+            readTodosByCategory(command);
+        } else if (command.contains("bugün") && (command.contains("oku") || command.contains("listele"))) {
+            readTodaysSchedule();
+        } else if (command.contains("yarın") && (command.contains("oku") || command.contains("listele"))) {
+            readTomorrowsSchedule();
+        } else if (command.contains("zamanlanmış") && (command.contains("oku") || command.contains("listele"))) {
+            readScheduledTodos();
+        } else if (command.contains("öncelikli") && (command.contains("oku") || command.contains("listele"))) {
+            readPriorityTodos();
+        } else if (command.contains("acil") && (command.contains("oku") || command.contains("listele"))) {
+            readTodosByPriority("URGENT");
+        } else if (command.contains("önemli") && (command.contains("oku") || command.contains("listele"))) {
+            readTodosByPriority("HIGH");
+        } else if (command.contains("hatırlatıcı") && command.contains("test")) {
+            testNotification();
+        } else if (command.contains("hatırlatıcıları") && (command.contains("yenile") || command.contains("güncelle"))) {
+            refreshNotifications();
         } else {
-            // Normal todo ekleme
-            addTodo(spokenText);
+            // Normal todo ekleme - akıllı kategori, öncelik ve tarih/saat tespiti ile
+            addTodoWithDateTime(spokenText);
         }
     }
     
-    private void addTodo(String text) {
+    private void addTodoWithDateTime(String text) {
         Todo todo = new Todo(text);
         
         // Save to database in background thread
         new Thread(() -> {
             todoDao.insertTodo(todo);
+            
+            // Eğer zamanlanmış todo ise hatırlatıcı ayarla
+            if (todo.hasScheduledDateTime()) {
+                notificationHelper.scheduleNotification(todo);
+            }
+            
             runOnUiThread(this::loadTodos);
         }).start();
         
-        Toast.makeText(this, "Todo eklendi: " + text, Toast.LENGTH_SHORT).show();
+        String message = "Todo eklendi: " + todo.getText();
+        if (todo.hasScheduledDateTime()) {
+            message += " (" + todo.getFormattedScheduledDateTime() + ")";
+            message += " 🔔 Hatırlatıcı ayarlandı";
+        }
+        
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
         triggerHapticFeedback();
     }
     
@@ -268,10 +311,24 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
             final int finalCompletedCount = completedCount;
             final int pendingCount = totalCount - completedCount;
             
+            // Kategori bazlı istatistikler
+            StringBuilder categoryStats = new StringBuilder();
+            for (Category category : Category.values()) {
+                int count = todoDao.getTodoCountByCategory(category);
+                if (count > 0) {
+                    categoryStats.append(category.getEmoji()).append(" ").append(count).append(", ");
+                }
+            }
+            
             runOnUiThread(() -> {
                 String message = "Toplam " + totalCount + " todo var. " + 
                                finalCompletedCount + " tamamlandı, " + 
-                               pendingCount + " bekliyor.";
+                               pendingCount + " bekliyor.\n";
+                
+                if (categoryStats.length() > 0) {
+                    message += "Kategoriler: " + categoryStats.substring(0, categoryStats.length() - 2);
+                }
+                
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show();
             });
         }).start();
@@ -305,6 +362,251 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
         }).start();
     }
     
+    private void showCategories() {
+        new Thread(() -> {
+            List<Category> categories = todoDao.getAllCategories();
+            StringBuilder categoryList = new StringBuilder("Mevcut kategoriler:\n");
+            
+            for (Category category : Category.values()) {
+                int count = todoDao.getTodoCountByCategory(category);
+                if (count > 0) {
+                    categoryList.append(category.getDisplayWithEmoji())
+                               .append(" (").append(count).append(" todo)\n");
+                }
+            }
+            
+            runOnUiThread(() -> 
+                Toast.makeText(this, categoryList.toString(), Toast.LENGTH_LONG).show()
+            );
+        }).start();
+    }
+    
+    private void readTodosByCategory(String command) {
+        Category targetCategory = null;
+        
+        // Komuttan kategori tespit et
+        String lowerCommand = command.toLowerCase();
+        for (Category category : Category.values()) {
+            if (lowerCommand.contains(category.getDisplayName().toLowerCase())) {
+                targetCategory = category;
+                break;
+            }
+        }
+        
+        if (targetCategory == null) {
+            Toast.makeText(this, "Kategori bulunamadı. 'Kategorileri göster' diyerek mevcut kategorileri görebilirsiniz.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        final Category finalCategory = targetCategory;
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getTodosByCategory(finalCategory);
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, finalCategory.getDisplayWithEmoji() + " kategorisinde todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder todoList = new StringBuilder(finalCategory.getDisplayWithEmoji() + " kategorisi:\n");
+                for (int i = 0; i < Math.min(todos.size(), 5); i++) {
+                    Todo todo = todos.get(i);
+                    todoList.append((i + 1)).append(". ").append(todo.getText());
+                    if (todo.isDone()) {
+                        todoList.append(" (Tamamlandı)");
+                    }
+                    todoList.append("\n");
+                }
+                if (todos.size() > 5) {
+                    todoList.append("... ve ").append(todos.size() - 5).append(" tane daha");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, todoList.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void readTodaysSchedule() {
+        Calendar today = Calendar.getInstance();
+        today.set(Calendar.HOUR_OF_DAY, 0);
+        today.set(Calendar.MINUTE, 0);
+        today.set(Calendar.SECOND, 0);
+        today.set(Calendar.MILLISECOND, 0);
+        
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getTodosByDate(today.getTimeInMillis());
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, "Bugün için zamanlanmış todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder schedule = new StringBuilder("Bugünkü program:\n");
+                for (Todo todo : todos) {
+                    schedule.append("• ").append(todo.getText());
+                    if (todo.hasScheduledTime()) {
+                        schedule.append(" (").append(todo.getFormattedScheduledDateTime()).append(")");
+                    }
+                    schedule.append("\n");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, schedule.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void readTomorrowsSchedule() {
+        Calendar tomorrow = Calendar.getInstance();
+        tomorrow.add(Calendar.DAY_OF_MONTH, 1);
+        tomorrow.set(Calendar.HOUR_OF_DAY, 0);
+        tomorrow.set(Calendar.MINUTE, 0);
+        tomorrow.set(Calendar.SECOND, 0);
+        tomorrow.set(Calendar.MILLISECOND, 0);
+        
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getTodosByDate(tomorrow.getTimeInMillis());
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, "Yarın için zamanlanmış todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder schedule = new StringBuilder("Yarınki program:\n");
+                for (Todo todo : todos) {
+                    schedule.append("• ").append(todo.getText());
+                    if (todo.hasScheduledTime()) {
+                        schedule.append(" (").append(todo.getFormattedScheduledDateTime()).append(")");
+                    }
+                    schedule.append("\n");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, schedule.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void readScheduledTodos() {
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getAllScheduledTodos();
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, "Zamanlanmış todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder schedule = new StringBuilder("Zamanlanmış todo'lar:\n");
+                for (int i = 0; i < Math.min(todos.size(), 10); i++) {
+                    Todo todo = todos.get(i);
+                    schedule.append("• ").append(todo.getText());
+                    schedule.append(" (").append(todo.getFormattedScheduledDateTime()).append(")");
+                    schedule.append("\n");
+                }
+                if (todos.size() > 10) {
+                    schedule.append("... ve ").append(todos.size() - 10).append(" tane daha");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, schedule.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void readPriorityTodos() {
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getAllTodosByPriority();
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, "Todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder priorityList = new StringBuilder("Öncelik sırasına göre todo'lar:\n");
+                for (int i = 0; i < Math.min(todos.size(), 8); i++) {
+                    Todo todo = todos.get(i);
+                    priorityList.append(todo.getPriority().getEmoji()).append(" ")
+                               .append(todo.getText());
+                    if (todo.hasScheduledDateTime()) {
+                        priorityList.append(" (").append(todo.getFormattedScheduledDateTime()).append(")");
+                    }
+                    priorityList.append("\n");
+                }
+                if (todos.size() > 8) {
+                    priorityList.append("... ve ").append(todos.size() - 8).append(" tane daha");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, priorityList.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void readTodosByPriority(String priorityName) {
+        Priority priority;
+        try {
+            priority = Priority.valueOf(priorityName);
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(this, "Geçersiz öncelik seviyesi", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        new Thread(() -> {
+            List<Todo> todos = todoDao.getTodosByPriority(priority);
+            if (todos.isEmpty()) {
+                runOnUiThread(() -> 
+                    Toast.makeText(this, priority.getDisplayWithEmoji() + " öncelikli todo bulunamadı", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                StringBuilder priorityList = new StringBuilder(priority.getDisplayWithEmoji() + " öncelikli todo'lar:\n");
+                for (int i = 0; i < Math.min(todos.size(), 5); i++) {
+                    Todo todo = todos.get(i);
+                    priorityList.append("• ").append(todo.getText());
+                    if (todo.hasScheduledDateTime()) {
+                        priorityList.append(" (").append(todo.getFormattedScheduledDateTime()).append(")");
+                    }
+                    priorityList.append("\n");
+                }
+                if (todos.size() > 5) {
+                    priorityList.append("... ve ").append(todos.size() - 5).append(" tane daha");
+                }
+                
+                runOnUiThread(() -> 
+                    Toast.makeText(this, priorityList.toString(), Toast.LENGTH_LONG).show()
+                );
+            }
+        }).start();
+    }
+    
+    private void testNotification() {
+        notificationHelper.showInstantNotification(
+            "🔔 Test Hatırlatıcısı",
+            "Hatırlatıcı sistemi çalışıyor!",
+            Priority.NORMAL
+        );
+        Toast.makeText(this, "Test hatırlatıcısı gönderildi", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void refreshNotifications() {
+        new Thread(() -> {
+            // Tüm zamanlanmış todo'lar için hatırlatıcıları yeniden ayarla
+            List<Todo> scheduledTodos = todoDao.getAllScheduledTodos();
+            int count = 0;
+            
+            for (Todo todo : scheduledTodos) {
+                if (!todo.isDone() && todo.hasScheduledDateTime()) {
+                    notificationHelper.scheduleNotification(todo);
+                    count++;
+                }
+            }
+            
+            final int finalCount = count;
+            runOnUiThread(() -> 
+                Toast.makeText(this, finalCount + " hatırlatıcı yenilendi", Toast.LENGTH_SHORT).show()
+            );
+        }).start();
+    }
+    
     private void triggerHapticFeedback() {
         if (vibrator != null && vibrator.hasVibrator()) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -333,6 +635,7 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
                     });
                 } else if (direction == ItemTouchHelper.LEFT) {
                     // Swipe left - Delete
+                    notificationHelper.cancelNotification(todo.getId());
                     todoDao.deleteTodo(todo);
                     runOnUiThread(() -> {
                         loadTodos();
@@ -376,6 +679,8 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     @Override
     public void onTodoDeleted(Todo todo) {
         new Thread(() -> {
+            // Hatırlatıcıyı iptal et
+            notificationHelper.cancelNotification(todo.getId());
             todoDao.deleteTodo(todo);
             runOnUiThread(this::loadTodos);
         }).start();

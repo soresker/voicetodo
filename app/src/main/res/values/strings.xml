@@ -1,11 +1,18 @@
 <resources>
-    <string name="app_name">Voice Todo</string>
+    <string name="app_name">🎤 Voice Todo</string>
     <string name="btn_voice_record">Ses Kaydet</string>
-    <string name="btn_listening">Dinleniyor...</string>
-    <string name="hint_todo">Todo eklemek için ses butonu kullan</string>
-    <string name="no_todos">Henüz todo yok</string>
-    <string name="speech_prompt">Lütfen konuşun...</string>
-    <string name="speech_not_available">Konuşma tanıma mevcut değil</string>
-    <string name="error_speech">Konuşma tanıma hatası</string>
-    <string name="permission_denied">Mikrofon izni gerekli</string>
+    <string name="btn_listening">🎧 Dinleniyor...</string>
+    <string name="hint_todo">🎤 Sesli komutlarla todo\'larını yönet\n"Yarın 14:00\'da toplantı" dene!</string>
+    <string name="no_todos">✨ Henüz todo yok\n\nSesli komutla başla:\n• "Bugün alışverişe gideceğim"\n• "Acil: Raporu tamamla"\n• "Yarın 15:00 toplantı"</string>
+    <string name="speech_prompt">🗣️ Ne yapacaksın? Söyle bana...</string>
+    <string name="speech_not_available">😔 Konuşma tanıma mevcut değil</string>
+    <string name="error_speech">❌ Konuşma tanıma hatası</string>
+    <string name="permission_denied">🎤 Mikrofon izni gerekli</string>
+    
+    <!-- New UI strings -->
+    <string name="quick_actions">Hızlı Komutlar</string>
+    <string name="stats_title">📊 İstatistikler</string>
+    <string name="categories_title">🏷️ Kategoriler</string>
+    <string name="scheduled_title">⏰ Zamanlanmış</string>
+    <string name="priority_title">⭐ Öncelikler</string>
 </resources>

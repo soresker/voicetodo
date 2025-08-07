@@ -1,14 +1,17 @@
 package com.voicetodo.app;
 
+import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.widget.CheckBox;
-import android.widget.ImageButton;
 import android.widget.TextView;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.checkbox.MaterialCheckBox;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -49,8 +52,8 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
         
         // Animate item only for new items
         if (animateItems && position == todos.size() - 1) {
-            Animation slideIn = AnimationUtils.loadAnimation(holder.itemView.getContext(), R.anim.slide_in_bottom);
-            holder.itemView.startAnimation(slideIn);
+            Animation scaleIn = AnimationUtils.loadAnimation(holder.itemView.getContext(), R.anim.scale_in);
+            holder.itemView.startAnimation(scaleIn);
         }
     }
     
@@ -68,13 +71,19 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
         
         private TextView tvTodoText;
         private TextView tvTimestamp;
-        private CheckBox cbDone;
-        private ImageButton btnDelete;
+        private TextView tvCategory;
+        private TextView tvPriority;
+        private TextView tvScheduledTime;
+        private MaterialCheckBox cbDone;
+        private MaterialButton btnDelete;
         
         public TodoViewHolder(@NonNull View itemView) {
             super(itemView);
             tvTodoText = itemView.findViewById(R.id.tv_todo_text);
             tvTimestamp = itemView.findViewById(R.id.tv_timestamp);
+            tvCategory = itemView.findViewById(R.id.tv_category);
+            tvPriority = itemView.findViewById(R.id.tv_priority);
+            tvScheduledTime = itemView.findViewById(R.id.tv_scheduled_time);
             cbDone = itemView.findViewById(R.id.cb_done);
             btnDelete = itemView.findViewById(R.id.btn_delete);
         }
@@ -85,6 +94,34 @@ public class TodoAdapter extends RecyclerView.Adapter<TodoAdapter.TodoViewHolder
             // Format timestamp
             SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
             tvTimestamp.setText(sdf.format(new Date(todo.getTimestamp())));
+            
+            // Set priority
+            Priority priority = todo.getPriority();
+            if (priority != null) {
+                tvPriority.setText(priority.getDisplayWithEmoji());
+                
+                // Set priority color
+                GradientDrawable priorityBackground = (GradientDrawable) tvPriority.getBackground();
+                priorityBackground.setColor(Color.parseColor(priority.getColorHex()));
+            }
+            
+            // Set category
+            Category category = todo.getCategory();
+            if (category != null) {
+                tvCategory.setText(category.getDisplayWithEmoji());
+                
+                // Set category color
+                GradientDrawable categoryBackground = (GradientDrawable) tvCategory.getBackground();
+                categoryBackground.setColor(Color.parseColor(category.getColorHex()));
+            }
+            
+            // Set scheduled date/time
+            if (todo.hasScheduledDateTime()) {
+                tvScheduledTime.setText(todo.getFormattedScheduledDateTime());
+                tvScheduledTime.setVisibility(View.VISIBLE);
+            } else {
+                tvScheduledTime.setVisibility(View.GONE);
+            }
             
             // Set checkbox state
             cbDone.setChecked(todo.isDone());
