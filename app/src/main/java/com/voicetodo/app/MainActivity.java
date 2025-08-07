@@ -1,14 +1,13 @@
 package com.voicetodo.app;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
@@ -36,6 +35,7 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTodoListener {
     
     private static final int REQUEST_SPEECH_INPUT = 1000;
+    private static final int SPEECH_REQUEST_CODE = 1000;
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     
     private ExtendedFloatingActionButton fabVoice;
@@ -50,8 +50,6 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     private Vibrator vibrator;
     private Animation pulseAnimation;
     private NotificationHelper notificationHelper;
-    private SpeechRecognizer speechRecognizer;
-    private boolean isListening = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -263,183 +261,35 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
             return;
         }
         
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Toast.makeText(this, getString(R.string.speech_not_available), Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        if (isListening) {
-            stopListening();
-            return;
-        }
-        
-        try {
-            initSpeechRecognizer();
-            startListening();
-        } catch (Exception e) {
-            Toast.makeText(this, getString(R.string.error_speech), Toast.LENGTH_SHORT).show();
-        }
-    }
-    
-    private void initSpeechRecognizer() {
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
-        }
-        
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        speechRecognizer.setRecognitionListener(new RecognitionListener() {
-            @Override
-            public void onReadyForSpeech(Bundle params) {
-                runOnUiThread(() -> {
-                    tvStatus.setText("🎤 Dinliyorum... Konuşmaya başlayın");
-                    fabVoice.setText("🔴 Durdur");
-                });
-            }
-            
-            @Override
-            public void onBeginningOfSpeech() {
-                runOnUiThread(() -> {
-                    tvStatus.setText("🗣️ Konuşuyor... Devam edin");
-                });
-            }
-            
-            @Override
-            public void onRmsChanged(float rmsdB) {
-                // Voice level indicator - optional
-            }
-            
-            @Override
-            public void onBufferReceived(byte[] buffer) {
-                // Partial results - optional
-            }
-            
-            @Override
-            public void onEndOfSpeech() {
-                runOnUiThread(() -> {
-                    tvStatus.setText("⏳ İşleniyor...");
-                });
-            }
-            
-            @Override
-            public void onError(int error) {
-                runOnUiThread(() -> {
-                    isListening = false;
-                    fabVoice.clearAnimation();
-                    fabVoice.setText("🎤 Sesli Komut");
-                    
-                    String errorMessage = "Ses tanıma hatası";
-                    switch (error) {
-                        case SpeechRecognizer.ERROR_AUDIO:
-                            errorMessage = "Ses kayıt hatası";
-                            break;
-                        case SpeechRecognizer.ERROR_CLIENT:
-                            errorMessage = "İstemci hatası";
-                            break;
-                        case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
-                            errorMessage = "Mikrofon izni gerekli";
-                            break;
-                        case SpeechRecognizer.ERROR_NETWORK:
-                            errorMessage = "Ağ hatası";
-                            break;
-                        case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
-                            errorMessage = "Ağ zaman aşımı";
-                            break;
-                        case SpeechRecognizer.ERROR_NO_MATCH:
-                            errorMessage = "Hiçbir metin tanınmadı";
-                            break;
-                        case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
-                            errorMessage = "Ses tanıyıcı meşgul";
-                            break;
-                        case SpeechRecognizer.ERROR_SERVER:
-                            errorMessage = "Sunucu hatası";
-                            break;
-                        case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
-                            errorMessage = "Konuşma zaman aşımı";
-                            break;
-                    }
-                    
-                    tvStatus.setText(getString(R.string.hint_todo));
-                    if (error != SpeechRecognizer.ERROR_NO_MATCH) {
-                        Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-            
-            @Override
-            public void onResults(Bundle results) {
-                runOnUiThread(() -> {
-                    isListening = false;
-                    fabVoice.clearAnimation();
-                    fabVoice.setText("🎤 Sesli Komut");
-                    tvStatus.setText(getString(R.string.hint_todo));
-                    
-                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (matches != null && !matches.isEmpty()) {
-                        String spokenText = matches.get(0);
-                        if (!spokenText.trim().isEmpty()) {
-                            processVoiceCommand(spokenText.trim());
-                        }
-                    }
-                });
-            }
-            
-            @Override
-            public void onPartialResults(Bundle partialResults) {
-                // Show partial results in real-time
-                ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (matches != null && !matches.isEmpty()) {
-                    runOnUiThread(() -> {
-                        tvStatus.setText("🎙️ \"" + matches.get(0) + "...\"");
-                    });
-                }
-            }
-            
-            @Override
-            public void onEvent(int eventType, Bundle params) {
-                // Handle speech events
-            }
-        });
-    }
-    
-    private void startListening() {
-        isListening = true;
-        
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR"); // Turkish language
-        intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
-        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000); // 3 seconds silence
-        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000);
-        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000); // 15 seconds minimum
-        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Ne yapmak istiyorsunuz?");
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 6000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 30000);
         
-        tvStatus.setText("🎤 Hazırlanıyor...");
-        fabVoice.setText("🔴 Durdur");
-        
-        // Start pulse animation and haptic feedback
-        fabVoice.startAnimation(pulseAnimation);
-        if (vibrator != null && vibrator.hasVibrator()) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(100);
-            }
+        try {
+            startActivityForResult(intent, SPEECH_REQUEST_CODE);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, getString(R.string.speech_not_available), Toast.LENGTH_SHORT).show();
         }
-        
-        speechRecognizer.startListening(intent);
     }
     
-    private void stopListening() {
-        isListening = false;
-        if (speechRecognizer != null) {
-            speechRecognizer.stopListening();
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (result != null && !result.isEmpty()) {
+                String spokenText = result.get(0);
+                if (!spokenText.trim().isEmpty()) {
+                    processVoiceCommand(spokenText.trim());
+                }
+            }
         }
-        fabVoice.clearAnimation();
-        fabVoice.setText("🎤 Sesli Komut");
-        tvStatus.setText(getString(R.string.hint_todo));
     }
-
     
     private void processVoiceCommand(String spokenText) {
         String command = spokenText.toLowerCase().trim();
@@ -961,9 +811,6 @@ public class MainActivity extends AppCompatActivity implements TodoAdapter.OnTod
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
-        }
     }
     
     @Override
