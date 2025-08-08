@@ -133,3 +133,13 @@ junit-reports/
 
 .bin
 .lock
+
+# Gradle build files and caches
+.gradle/
+**/build/
+.gradle/**
+gradle/buildOutputCleanup/
+gradle/file-system.probe
+**/*.bin
+**/*.lock
+build/reports/
